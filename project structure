@@ -1,22 +1,29 @@
+# Project Structure
+
+```text
 student-management-system/
 │
 ├── backend/
-│   ├── server.js
-│   ├── package.json
-│   ├── routes/
-│   ├── controllers/
-│   └── models/
+│   └── .gitkeep
 │
 ├── frontend/
-│   ├── index.html
-│   ├── style.css
-│   └── script.js
+│   └── .gitkeep
 │
 ├── database/
-│   └── schema.sql
+│   └── .gitkeep
 │
 ├── docs/
+│   └── .gitkeep
 │
-├── .gitignore
 ├── README.md
 └── PROJECT_STRUCTURE.md
+```
+
+## Folder Description
+
+backend/ – Contains the backend application and APIs.
+frontend/ – Contains the user interface files.
+database/ – Contains database and SQL files.
+docs/ – Contains project documentation, diagrams, and screenshots.
+README.md – Contains project overview and information.
+PROJECT_STRUCTURE.md– Describes the project folder structure.
