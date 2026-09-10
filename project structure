@@ -1,0 +1,22 @@
+student-management-system/
+│
+├── backend/
+│   ├── server.js
+│   ├── package.json
+│   ├── routes/
+│   ├── controllers/
+│   └── models/
+│
+├── frontend/
+│   ├── index.html
+│   ├── style.css
+│   └── script.js
+│
+├── database/
+│   └── schema.sql
+│
+├── docs/
+│
+├── .gitignore
+├── README.md
+└── PROJECT_STRUCTURE.md
