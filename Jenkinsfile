@@ -17,7 +17,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'student-management-system'
-        PYTHON_EXE = 'python'
+       PYTHON_EXE = 'C:\\Users\\moula\\AppData\\Local\\Programs\\Python\\Python315\\python.exe'
         VENV_PY = "${WORKSPACE}\\.venv\\Scripts\\python.exe"
         APP_PORT = '5001'
         BASE_URL = 'http://localhost:5001'
