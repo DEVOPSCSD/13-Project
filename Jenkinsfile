@@ -22,6 +22,7 @@ pipeline {
         VENV_PY = "${WORKSPACE}\\.venv\\Scripts\\python.exe"
 
         DOCKER_EXE = 'C:\\Users\\moula\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe'
+        COMPOSE_EXE = 'C:\\Users\\moula\\.docker\\cli-plugins\\docker-compose.exe'
 
         APP_PORT = '5000'
         BASE_URL = 'http://localhost:5000'
@@ -43,33 +44,34 @@ pipeline {
                         echo ERROR: Python executable not found: %PYTHON_EXE%
                         exit /b 1
                     )
+
                     "%PYTHON_EXE%" --version
                     if errorlevel 1 exit /b 1
                 '''
             }
         }
 
-stage('Check Docker') {
-    steps {
-        bat '''
-            if not exist "%DOCKER_EXE%" (
-                echo ERROR: Docker executable not found: %DOCKER_EXE%
-                exit /b 1
-            )
+        stage('Check Docker') {
+            steps {
+                bat '''
+                    if not exist "%DOCKER_EXE%" (
+                        echo ERROR: Docker executable not found: %DOCKER_EXE%
+                        exit /b 1
+                    )
 
-            "%DOCKER_EXE%" version
-            if errorlevel 1 exit /b 1
+                    if not exist "%COMPOSE_EXE%" (
+                        echo ERROR: Docker Compose executable not found: %COMPOSE_EXE%
+                        exit /b 1
+                    )
 
-            "%DOCKER_EXE%" compose version
-            if errorlevel 1 (
-                echo ERROR: Docker Compose plugin is missing or unavailable.
-                echo Repair or update Docker Desktop, then try again.
-                exit /b 1
-            )
-        '''
-    }
-}
+                    "%DOCKER_EXE%" version
+                    if errorlevel 1 exit /b 1
 
+                    "%COMPOSE_EXE%" version
+                    if errorlevel 1 exit /b 1
+                '''
+            }
+        }
 
         stage('Install Dependencies') {
             steps {
@@ -132,7 +134,7 @@ stage('Check Docker') {
                     "%VENV_PY%" -m pip install -r selenium-tests\\requirements.txt
                     if errorlevel 1 exit /b 1
 
-                    "%DOCKER_EXE%" compose up --detach --build
+                    "%COMPOSE_EXE%" -p sms_ci up --detach --build
                     if errorlevel 1 exit /b 1
 
                     powershell -NoProfile -ExecutionPolicy Bypass -Command "$ready=$false; for($i=0;$i -lt 30;$i++){try{$response=Invoke-RestMethod 'http://localhost:5000/api/health' -TimeoutSec 3; $ready=$true; break}catch{Start-Sleep -Seconds 2}}; if(-not $ready){Write-Error 'Application health check failed at http://localhost:5000/api/health'; exit 1}"
@@ -149,7 +151,7 @@ stage('Check Docker') {
                 always {
                     bat(
                         returnStatus: true,
-                        script: '"%DOCKER_EXE%" compose down -v'
+                        script: '"%COMPOSE_EXE%" -p sms_ci down -v'
                     )
                 }
             }
