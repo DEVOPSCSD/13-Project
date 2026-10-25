@@ -23,8 +23,8 @@ pipeline {
 
         DOCKER_EXE = 'C:\\Users\\moula\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe'
 
-        APP_PORT = '5001'
-        BASE_URL = 'http://localhost:5001'
+        APP_PORT = '5000'
+        BASE_URL = 'http://localhost:5000'
         COMPOSE_PROJECT_NAME = 'sms_ci'
         SEED_DEMO_DATA = 'false'
     }
@@ -122,7 +122,7 @@ pipeline {
                     "%DOCKER_EXE%" compose up -d --build
                     if errorlevel 1 exit /b 1
 
-                    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ready=$false; for($i=0;$i -lt 30;$i++){try{$null=Invoke-RestMethod 'http://localhost:5001/api/health'; $ready=$true; break}catch{Start-Sleep -Seconds 2}}; if(-not $ready){Write-Error 'Application health check failed'; exit 1}"
+                    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ready=$false; for($i=0;$i -lt 30;$i++){try{$null=Invoke-RestMethod 'http://localhost:5000/api/health'; $ready=$true; break}catch{Start-Sleep -Seconds 2}}; if(-not $ready){Write-Error 'Application health check failed'; exit 1}"
                     if errorlevel 1 exit /b 1
                 '''
 
