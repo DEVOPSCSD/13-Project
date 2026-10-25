@@ -147,14 +147,14 @@ pipeline {
                 }
             }
 
-            post {
+                   post {
                 always {
                     bat(
-                        returnStatus: true,
-                        script: '"%COMPOSE_EXE%" -p sms_ci down -v'
-                    )
-                }
-            }
+            returnStatus: true,
+            script: '"%COMPOSE_EXE%" -p sms_ci down'
+        )
+    }
+}
         }
     }
 
