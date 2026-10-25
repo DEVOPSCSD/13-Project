@@ -17,7 +17,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'student-management-system'
-        PYTHON_EXE = 'PYTHON_EXE = 'C:\\Users\\moula\\AppData\\Local\\Programs\\Python\\Python315\\python.exe'
+        PYTHON_EXE = 'C:\\Users\\moula\\AppData\\Local\\Programs\\Python\\Python315\\python.exe'
         VENV_PY = "${WORKSPACE}\\.venv\\Scripts\\python.exe"
         APP_PORT = '5001'
         BASE_URL = 'http://localhost:5001'
@@ -35,8 +35,8 @@ pipeline {
         stage('Check Python') {
             steps {
                 bat '''
-                    where python
-                    python --version
+                    "%PYTHON_EXE%" --version
+                    "%PYTHON_EXE%" -c "import sys; print(sys.executable)"
                 '''
             }
         }
@@ -44,9 +44,14 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 bat '''
-                    if not exist .venv "%PYTHON_EXE%" -m venv .venv
+                    if not exist ".venv\\Scripts\\python.exe" "%PYTHON_EXE%" -m venv .venv
+                    if errorlevel 1 exit /b 1
+
                     "%VENV_PY%" -m pip install --upgrade pip
+                    if errorlevel 1 exit /b 1
+
                     "%VENV_PY%" -m pip install -r backend\\requirements-dev.txt
+                    if errorlevel 1 exit /b 1
                 '''
             }
         }
@@ -74,8 +79,13 @@ pipeline {
             steps {
                 bat '''
                     "%VENV_PY%" -m pip install -r selenium-tests\\requirements.txt
+                    if errorlevel 1 exit /b 1
+
                     docker compose up -d --build
+                    if errorlevel 1 exit /b 1
+
                     powershell -NoProfile -ExecutionPolicy Bypass -Command "$ready=$false; for($i=0;$i -lt 30;$i++){try{$r=Invoke-RestMethod 'http://localhost:5001/api/health'; $ready=$true; break}catch{Start-Sleep -Seconds 2}}; if(-not $ready){exit 1}"
+                    if errorlevel 1 exit /b 1
                 '''
 
                 dir('selenium-tests') {
