@@ -49,26 +49,27 @@ pipeline {
             }
         }
 
-        stage('Check Docker') {
-            steps {
-                bat '''
-                    if not exist "%DOCKER_EXE%" (
-                        echo ERROR: Docker executable not found: %DOCKER_EXE%
-                        exit /b 1
-                    )
+stage('Check Docker') {
+    steps {
+        bat '''
+            if not exist "%DOCKER_EXE%" (
+                echo ERROR: Docker executable not found: %DOCKER_EXE%
+                exit /b 1
+            )
 
-                    "%DOCKER_EXE%" version
-                    if errorlevel 1 exit /b 1
+            "%DOCKER_EXE%" version
+            if errorlevel 1 exit /b 1
 
-                    "%DOCKER_EXE%" compose version
-                    if errorlevel 1 (
-                        echo ERROR: Docker Compose is unavailable.
-                        echo Check Docker Desktop and its Compose plugin.
-                        exit /b 1
-                    )
-                '''
-            }
-        }
+            "%DOCKER_EXE%" compose version
+            if errorlevel 1 (
+                echo ERROR: Docker Compose plugin is missing or unavailable.
+                echo Repair or update Docker Desktop, then try again.
+                exit /b 1
+            )
+        '''
+    }
+}
+
 
         stage('Install Dependencies') {
             steps {
