@@ -39,26 +39,42 @@ pipeline {
         stage('Check Python') {
             steps {
                 bat '''
+                    if not exist "%PYTHON_EXE%" (
+                        echo Python executable not found: %PYTHON_EXE%
+                        exit /b 1
+                    )
                     "%PYTHON_EXE%" --version
-                    "%PYTHON_EXE%" -c "import sys; print(sys.executable)"
                 '''
             }
         }
 
         stage('Check Docker') {
             steps {
-                bat '"%DOCKER_EXE%" version'
+                bat '''
+                    if not exist "%DOCKER_EXE%" (
+                        echo Docker executable not found: %DOCKER_EXE%
+                        exit /b 1
+                    )
+                    "%DOCKER_EXE%" version
+                '''
             }
         }
 
         stage('Install Dependencies') {
             steps {
                 bat '''
-                    if not exist ".venv\\Scripts\\python.exe" "%PYTHON_EXE%" -m venv .venv
-                    if errorlevel 1 exit /b 1
+                    if not exist ".venv\\Scripts\\python.exe" (
+                        "%PYTHON_EXE%" -m venv .venv
+                        if errorlevel 1 exit /b 1
+                    )
 
                     "%VENV_PY%" -m pip install --upgrade pip
                     if errorlevel 1 exit /b 1
+
+                    if not exist "backend\\requirements-dev.txt" (
+                        echo Missing backend\\requirements-dev.txt
+                        exit /b 1
+                    )
 
                     "%VENV_PY%" -m pip install -r backend\\requirements-dev.txt
                     if errorlevel 1 exit /b 1
@@ -76,7 +92,10 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                bat '"%DOCKER_EXE%" build -t %IMAGE_NAME%:%BUILD_NUMBER% -t %IMAGE_NAME%:latest .'
+                bat '''
+                    "%DOCKER_EXE%" build -t %IMAGE_NAME%:%BUILD_NUMBER% -t %IMAGE_NAME%:latest .
+                    if errorlevel 1 exit /b 1
+                '''
             }
         }
 
@@ -87,13 +106,23 @@ pipeline {
 
             steps {
                 bat '''
+                    if not exist "selenium-tests\\requirements.txt" (
+                        echo Missing selenium-tests\\requirements.txt
+                        exit /b 1
+                    )
+
+                    if not exist "selenium-tests\\test_student_management.py" (
+                        echo Missing selenium-tests\\test_student_management.py
+                        exit /b 1
+                    )
+
                     "%VENV_PY%" -m pip install -r selenium-tests\\requirements.txt
                     if errorlevel 1 exit /b 1
 
                     "%DOCKER_EXE%" compose up -d --build
                     if errorlevel 1 exit /b 1
 
-                    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ready=$false; for($i=0;$i -lt 30;$i++){try{$r=Invoke-RestMethod 'http://localhost:5001/api/health'; $ready=$true; break}catch{Start-Sleep -Seconds 2}}; if(-not $ready){exit 1}"
+                    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ready=$false; for($i=0;$i -lt 30;$i++){try{$null=Invoke-RestMethod 'http://localhost:5001/api/health'; $ready=$true; break}catch{Start-Sleep -Seconds 2}}; if(-not $ready){Write-Error 'Application health check failed'; exit 1}"
                     if errorlevel 1 exit /b 1
                 '''
 
@@ -104,7 +133,10 @@ pipeline {
 
             post {
                 always {
-                    bat '"%DOCKER_EXE%" compose down -v'
+                    bat(
+                        returnStatus: true,
+                        script: '"%DOCKER_EXE%" compose down -v'
+                    )
                 }
             }
         }
@@ -120,3 +152,4 @@ pipeline {
         }
     }
 }
+
