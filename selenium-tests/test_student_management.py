@@ -1,137 +1,167 @@
-"""Selenium end-to-end tests (Chrome). The application must already be running.
 
-BASE_URL  : address of the app (default http://localhost:5000)
-HEADLESS  : "true" (default) runs Chrome without a window; "false" shows the browser
+pipeline {
+    agent any
 
-Every test creates students with a unique random ID and removes them afterwards,
-so normal demo records are never touched.
-"""
-import os
-import uuid
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
 
-import pytest
-import requests
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import Select, WebDriverWait
+    parameters {
+        booleanParam(
+            name: 'RUN_SELENIUM',
+            defaultValue: false,
+            description: 'Run Selenium browser tests after building the Docker image'
+        )
+    }
 
-BASE_URL = os.environ.get("BASE_URL", "http://localhost:5000").rstrip("/")
-HEADLESS = os.environ.get("HEADLESS", "true").lower() == "true"
+    environment {
+        IMAGE_NAME = 'student-management-system'
 
+        PYTHON_EXE = 'C:\\Users\\moula\\AppData\\Local\\Programs\\Python\\Python315\\python.exe'
+        VENV_PY = "${WORKSPACE}\\.venv\\Scripts\\python.exe"
 
-@pytest.fixture(scope="session")
-def driver():
-    opts = webdriver.ChromeOptions()
-    if HEADLESS:
-        opts.add_argument("--headless=new")
-    opts.add_argument("--window-size=1400,1000")
-    opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage")
-    drv = webdriver.Chrome(options=opts)   # Selenium Manager downloads ChromeDriver itself
-    yield drv
-    drv.quit()
+        DOCKER_EXE = 'C:\\Users\\moula\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe'
 
+        APP_PORT = '5000'
+        BASE_URL = 'http://localhost:5000'
+        COMPOSE_PROJECT_NAME = 'sms_ci'
+        SEED_DEMO_DATA = 'false'
+    }
 
-@pytest.fixture
-def wait(driver):
-    return WebDriverWait(driver, 10)
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
 
+        stage('Check Python') {
+            steps {
+                bat '''
+                    if not exist "%PYTHON_EXE%" (
+                        echo ERROR: Python executable not found: %PYTHON_EXE%
+                        exit /b 1
+                    )
+                    "%PYTHON_EXE%" --version
+                    if errorlevel 1 exit /b 1
+                '''
+            }
+        }
 
-@pytest.fixture
-def student():
-    """Unique student data; deleted through the API after the test."""
-    token = uuid.uuid4().hex[:8]
-    data = {"student_id": "SEL-" + token.upper(), "full_name": "Selenium " + token,
-            "email": f"sel.{token}@example.com", "course": "QA Testing " + token,
-            "year_of_study": 3, "phone": "9000000000"}
-    yield data
-    try:
-        rows = requests.get(f"{BASE_URL}/api/students", params={"search": token}, timeout=10).json()["data"]
-        for row in rows:
-            requests.delete(f"{BASE_URL}/api/students/{row['id']}", timeout=10)
-    except requests.RequestException:
-        pass
+        stage('Check Docker') {
+            steps {
+                bat '''
+                    if not exist "%DOCKER_EXE%" (
+                        echo ERROR: Docker executable not found: %DOCKER_EXE%
+                        exit /b 1
+                    )
 
+                    "%DOCKER_EXE%" version
+                    if errorlevel 1 exit /b 1
 
-@pytest.fixture
-def page(driver, wait):
-    driver.get(BASE_URL)
-    wait.until(EC.visibility_of_element_located((By.ID, "student-form")))
-    wait.until(EC.invisibility_of_element_located((By.ID, "loading")))
-    return driver
+                    "%DOCKER_EXE%" compose version
+                    if errorlevel 1 (
+                        echo ERROR: Docker Compose is unavailable.
+                        echo Check Docker Desktop and its Compose plugin.
+                        exit /b 1
+                    )
+                '''
+            }
+        }
 
+        stage('Install Dependencies') {
+            steps {
+                bat '''
+                    if not exist ".venv\\Scripts\\python.exe" (
+                        "%PYTHON_EXE%" -m venv .venv
+                        if errorlevel 1 exit /b 1
+                    )
 
-def fill_form(driver, d):
-    for el_id, key in [("input-student-id", "student_id"), ("input-full-name", "full_name"),
-                       ("input-email", "email"), ("input-course", "course"), ("input-phone", "phone")]:
-        field = driver.find_element(By.ID, el_id)
-        field.clear()
-        field.send_keys(d[key])
-    Select(driver.find_element(By.ID, "input-year")).select_by_value(str(d["year_of_study"]))
+                    "%VENV_PY%" -m pip install --upgrade pip
+                    if errorlevel 1 exit /b 1
 
+                    if not exist "backend\\requirements-dev.txt" (
+                        echo ERROR: Missing backend\\requirements-dev.txt
+                        exit /b 1
+                    )
 
-def row_for(driver, student_id):
-    return (By.CSS_SELECTOR, f'tr[data-student-id="{student_id}"]')
+                    "%VENV_PY%" -m pip install -r backend\\requirements-dev.txt
+                    if errorlevel 1 exit /b 1
+                '''
+            }
+        }
 
+        stage('Backend Unit Tests') {
+            steps {
+                dir('backend') {
+                    bat '"%VENV_PY%" -m pytest -v'
+                }
+            }
+        }
 
-def add_student(driver, wait, d):
-    fill_form(driver, d)
-    driver.find_element(By.ID, "btn-submit").click()
-    wait.until(EC.presence_of_element_located(row_for(driver, d["student_id"])))
+        stage('Build Docker Image') {
+            steps {
+                bat '''
+                    "%DOCKER_EXE%" build -t %IMAGE_NAME%:%BUILD_NUMBER% -t %IMAGE_NAME%:latest .
+                    if errorlevel 1 exit /b 1
+                '''
+            }
+        }
 
+        stage('Selenium Tests') {
+            when {
+                expression {
+                    return params.RUN_SELENIUM
+                }
+            }
 
-def test_website_opens(page):
-    assert "Student Management" in page.title
+            steps {
+                bat '''
+                    if not exist "selenium-tests\\requirements.txt" (
+                        echo ERROR: Missing selenium-tests\\requirements.txt
+                        exit /b 1
+                    )
 
+                    if not exist "selenium-tests\\test_student_management.py" (
+                        echo ERROR: Missing selenium-tests\\test_student_management.py
+                        exit /b 1
+                    )
 
-def test_registration_form_visible(page):
-    assert page.find_element(By.ID, "student-form").is_displayed()
-    assert page.find_element(By.ID, "btn-submit").is_displayed()
+                    "%VENV_PY%" -m pip install -r selenium-tests\\requirements.txt
+                    if errorlevel 1 exit /b 1
 
+                    "%DOCKER_EXE%" compose up --detach --build
+                    if errorlevel 1 exit /b 1
 
-def test_add_student_appears_in_directory(page, wait, student):
-    add_student(page, wait, student)
-    wait.until(EC.text_to_be_present_in_element((By.ID, "toast"), "added successfully"))
-    assert student["full_name"] in page.find_element(*row_for(page, student["student_id"])).text
+                    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ready=$false; for($i=0;$i -lt 30;$i++){try{$response=Invoke-RestMethod 'http://localhost:5000/api/health' -TimeoutSec 3; $ready=$true; break}catch{Start-Sleep -Seconds 2}}; if(-not $ready){Write-Error 'Application health check failed at http://localhost:5000/api/health'; exit 1}"
 
+                    if errorlevel 1 exit /b 1
+                '''
 
-def test_search_filters_records(page, wait, student):
-    add_student(page, wait, student)
-    box = page.find_element(By.ID, "search-input")
-    box.clear()
-    box.send_keys(student["course"])
-    wait.until(lambda d: len(d.find_elements(By.CSS_SELECTOR, "#students-table-body tr")) == 1)
-    assert page.find_element(*row_for(page, student["student_id"])).is_displayed()
-    box.clear()
-    box.send_keys("no-such-student-xyz")
-    wait.until(EC.visibility_of_element_located((By.ID, "empty-state")))
+                dir('selenium-tests') {
+                    bat '"%VENV_PY%" -m pytest -v'
+                }
+            }
 
+            post {
+                always {
+                    bat(
+                        returnStatus: true,
+                        script: '"%DOCKER_EXE%" compose down -v'
+                    )
+                }
+            }
+        }
+    }
 
-def test_invalid_submission_shows_errors(page, wait):
-    page.find_element(By.ID, "input-email").send_keys("not-an-email")
-    page.find_element(By.ID, "btn-submit").click()
-    wait.until(EC.text_to_be_present_in_element((By.ID, "error-email"), "valid email"))
-    assert page.find_element(By.ID, "error-student_id").text != ""
-    assert page.find_element(By.ID, "toast").is_displayed()
+    post {
+        success {
+            echo 'Pipeline completed successfully.'
+        }
 
-
-def test_edit_student(page, wait, student):
-    add_student(page, wait, student)
-    row = page.find_element(*row_for(page, student["student_id"]))
-    row.find_element(By.CSS_SELECTOR, 'button[data-action="edit"]').click()
-    wait.until(EC.text_to_be_present_in_element((By.ID, "form-title"), "Edit student"))
-    name = page.find_element(By.ID, "input-full-name")
-    name.clear()
-    name.send_keys("Edited Name")
-    page.find_element(By.ID, "btn-submit").click()
-    wait.until(EC.text_to_be_present_in_element((By.ID, "toast"), "updated successfully"))
-    wait.until(lambda d: "Edited Name" in d.find_element(*row_for(d, student["student_id"])).text)
-
-
-def test_delete_student(page, wait, student):
-    add_student(page, wait, student)
-    row = page.find_element(*row_for(page, student["student_id"]))
-    row.find_element(By.CSS_SELECTOR, 'button[data-action="delete"]').click()
-    wait.until(EC.element_to_be_clickable((By.ID, "confirm-yes"))).click()
-    wait.until(EC.invisibility_of_element_located(row_for(page, student["student_id"])))
+        failure {
+            echo 'Pipeline failed. Check Console Output for the first failed stage.'
+        }
+    }
+}
