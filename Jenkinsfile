@@ -21,7 +21,7 @@ pipeline {
         PYTHON_EXE = 'C:\\Users\\moula\\AppData\\Local\\Programs\\Python\\Python315\\python.exe'
         VENV_PY = "${WORKSPACE}\\.venv\\Scripts\\python.exe"
 
-        DOCKER_EXE = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe'
+        DOCKER_EXE = 'C:\\Users\\moula\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe'
 
         APP_PORT = '5001'
         BASE_URL = 'http://localhost:5001'
