@@ -17,8 +17,12 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'student-management-system'
+
         PYTHON_EXE = 'C:\\Users\\moula\\AppData\\Local\\Programs\\Python\\Python315\\python.exe'
         VENV_PY = "${WORKSPACE}\\.venv\\Scripts\\python.exe"
+
+        DOCKER_EXE = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe'
+
         APP_PORT = '5001'
         BASE_URL = 'http://localhost:5001'
         COMPOSE_PROJECT_NAME = 'sms_ci'
@@ -38,6 +42,12 @@ pipeline {
                     "%PYTHON_EXE%" --version
                     "%PYTHON_EXE%" -c "import sys; print(sys.executable)"
                 '''
+            }
+        }
+
+        stage('Check Docker') {
+            steps {
+                bat '"%DOCKER_EXE%" version'
             }
         }
 
@@ -66,8 +76,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                bat 'docker version'
-                bat 'docker build -t %IMAGE_NAME%:%BUILD_NUMBER% -t %IMAGE_NAME%:latest .'
+                bat '"%DOCKER_EXE%" build -t %IMAGE_NAME%:%BUILD_NUMBER% -t %IMAGE_NAME%:latest .'
             }
         }
 
@@ -81,7 +90,7 @@ pipeline {
                     "%VENV_PY%" -m pip install -r selenium-tests\\requirements.txt
                     if errorlevel 1 exit /b 1
 
-                    docker compose up -d --build
+                    "%DOCKER_EXE%" compose up -d --build
                     if errorlevel 1 exit /b 1
 
                     powershell -NoProfile -ExecutionPolicy Bypass -Command "$ready=$false; for($i=0;$i -lt 30;$i++){try{$r=Invoke-RestMethod 'http://localhost:5001/api/health'; $ready=$true; break}catch{Start-Sleep -Seconds 2}}; if(-not $ready){exit 1}"
@@ -95,7 +104,7 @@ pipeline {
 
             post {
                 always {
-                    bat 'docker compose down -v'
+                    bat '"%DOCKER_EXE%" compose down -v'
                 }
             }
         }
@@ -105,6 +114,7 @@ pipeline {
         success {
             echo 'Pipeline completed successfully.'
         }
+
         failure {
             echo 'Pipeline failed. Check Console Output for the first failed stage.'
         }
