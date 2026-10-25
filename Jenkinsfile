@@ -40,10 +40,11 @@ pipeline {
             steps {
                 bat '''
                     if not exist "%PYTHON_EXE%" (
-                        echo Python executable not found: %PYTHON_EXE%
+                        echo ERROR: Python executable not found: %PYTHON_EXE%
                         exit /b 1
                     )
                     "%PYTHON_EXE%" --version
+                    if errorlevel 1 exit /b 1
                 '''
             }
         }
@@ -52,10 +53,19 @@ pipeline {
             steps {
                 bat '''
                     if not exist "%DOCKER_EXE%" (
-                        echo Docker executable not found: %DOCKER_EXE%
+                        echo ERROR: Docker executable not found: %DOCKER_EXE%
                         exit /b 1
                     )
+
                     "%DOCKER_EXE%" version
+                    if errorlevel 1 exit /b 1
+
+                    "%DOCKER_EXE%" compose version
+                    if errorlevel 1 (
+                        echo ERROR: Docker Compose is unavailable.
+                        echo Check Docker Desktop and its Compose plugin.
+                        exit /b 1
+                    )
                 '''
             }
         }
@@ -72,7 +82,7 @@ pipeline {
                     if errorlevel 1 exit /b 1
 
                     if not exist "backend\\requirements-dev.txt" (
-                        echo Missing backend\\requirements-dev.txt
+                        echo ERROR: Missing backend\\requirements-dev.txt
                         exit /b 1
                     )
 
@@ -101,28 +111,31 @@ pipeline {
 
         stage('Selenium Tests') {
             when {
-                expression { return params.RUN_SELENIUM }
+                expression {
+                    return params.RUN_SELENIUM
+                }
             }
 
             steps {
                 bat '''
                     if not exist "selenium-tests\\requirements.txt" (
-                        echo Missing selenium-tests\\requirements.txt
+                        echo ERROR: Missing selenium-tests\\requirements.txt
                         exit /b 1
                     )
 
                     if not exist "selenium-tests\\test_student_management.py" (
-                        echo Missing selenium-tests\\test_student_management.py
+                        echo ERROR: Missing selenium-tests\\test_student_management.py
                         exit /b 1
                     )
 
                     "%VENV_PY%" -m pip install -r selenium-tests\\requirements.txt
                     if errorlevel 1 exit /b 1
 
-                    "%DOCKER_EXE%" compose up -d --build
+                    "%DOCKER_EXE%" compose up --detach --build
                     if errorlevel 1 exit /b 1
 
-                    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ready=$false; for($i=0;$i -lt 30;$i++){try{$null=Invoke-RestMethod 'http://localhost:5000/api/health'; $ready=$true; break}catch{Start-Sleep -Seconds 2}}; if(-not $ready){Write-Error 'Application health check failed'; exit 1}"
+                    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ready=$false; for($i=0;$i -lt 30;$i++){try{$response=Invoke-RestMethod 'http://localhost:5000/api/health' -TimeoutSec 3; $ready=$true; break}catch{Start-Sleep -Seconds 2}}; if(-not $ready){Write-Error 'Application health check failed at http://localhost:5000/api/health'; exit 1}"
+
                     if errorlevel 1 exit /b 1
                 '''
 
@@ -152,4 +165,3 @@ pipeline {
         }
     }
 }
-
